@@ -19,6 +19,16 @@ import (
 	"github.com/ffuf/ffuf/v2/pkg/scraper"
 )
 
+func containsRegexPattern(value string) bool {
+	for _, part := range strings.Split(value, ",") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(part, "/") && strings.Count(part, "/") >= 2 {
+			return true
+		}
+	}
+	return false
+}
+
 type multiStringFlag []string
 type wordlistFlag []string
 
@@ -325,6 +335,9 @@ func SetupFilters(parseOpts *ffuf.ConfigOptions, conf *ffuf.Config) error {
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == "mc" {
 			statusSet = true
+			if containsRegexPattern(f.Value.String()) {
+				warningIgnoreBody = true
+			}
 		}
 		if f.Name == "ms" {
 			matcherSet = true
@@ -353,6 +366,9 @@ func SetupFilters(parseOpts *ffuf.ConfigOptions, conf *ffuf.Config) error {
 	}
 
 	if parseOpts.Filter.Status != "" {
+		if containsRegexPattern(parseOpts.Filter.Status) {
+			warningIgnoreBody = true
+		}
 		if err := conf.MatcherManager.AddFilter("status", parseOpts.Filter.Status, false); err != nil {
 			errs.Add(err)
 		}
