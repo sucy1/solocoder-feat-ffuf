@@ -1,6 +1,7 @@
 package output
 
 import (
+	"bufio"
 	"encoding/json"
 	"os"
 	"time"
@@ -96,4 +97,58 @@ func writeJSON(filename string, config *ffuf.Config, res []ffuf.Result) error {
 		return err
 	}
 	return nil
+}
+
+func writeJSONL(filename string, config *ffuf.Config, res []ffuf.Result) error {
+	t := time.Now()
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := bufio.NewWriter(file)
+	for _, r := range res {
+		strinput := make(map[string]string)
+		for k, v := range r.Input {
+			strinput[k] = string(v)
+		}
+		jsonRes := JsonResult{
+			Input:            strinput,
+			Position:         r.Position,
+			StatusCode:       r.StatusCode,
+			ContentLength:    r.ContentLength,
+			ContentWords:     r.ContentWords,
+			ContentLines:     r.ContentLines,
+			ContentType:      r.ContentType,
+			RedirectLocation: r.RedirectLocation,
+			ScraperData:      r.ScraperData,
+			Duration:         r.Duration,
+			ResultFile:       r.ResultFile,
+			Url:              r.Url,
+			Host:             r.Host,
+		}
+		line := struct {
+			CommandLine string     `json:"commandline"`
+			Time        string     `json:"time"`
+			Result      JsonResult `json:"result"`
+		}{
+			CommandLine: config.CommandLine,
+			Time:        t.Format(time.RFC3339),
+			Result:      jsonRes,
+		}
+		outBytes, err := json.Marshal(line)
+		if err != nil {
+			return err
+		}
+		_, err = writer.Write(outBytes)
+		if err != nil {
+			return err
+		}
+		_, err = writer.WriteString("\n")
+		if err != nil {
+			return err
+		}
+	}
+	return writer.Flush()
 }

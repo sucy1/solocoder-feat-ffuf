@@ -162,11 +162,6 @@ func (s *Stdoutput) SetCurrentResults(results []ffuf.Result) {
 }
 
 func (s *Stdoutput) Progress(status ffuf.Progress) {
-	if s.config.Quiet {
-		// No progress for quiet mode
-		return
-	}
-
 	dur := time.Since(status.StartedAt)
 	runningSecs := int(dur / time.Second)
 	var reqRate int64
@@ -174,6 +169,16 @@ func (s *Stdoutput) Progress(status ffuf.Progress) {
 		reqRate = status.ReqSec
 	} else {
 		reqRate = 0
+	}
+
+	if s.config.Quiet {
+		// Simple progress bar for quiet mode: just rate and percentage
+		percent := 0
+		if status.ReqTotal > 0 {
+			percent = (status.ReqCount * 100) / status.ReqTotal
+		}
+		fmt.Fprintf(os.Stderr, "%s[%d%%] %d req/sec", TERMINAL_CLEAR_LINE, percent, reqRate)
+		return
 	}
 
 	hours := dur / time.Hour
@@ -238,6 +243,12 @@ func (s *Stdoutput) writeToAll(filename string, config *ffuf.Config, res []ffuf.
 		s.Error(err.Error())
 	}
 
+	s.config.OutputFile = BaseFilename + ".jsonl"
+	err = writeJSONL(s.config.OutputFile, s.config, res)
+	if err != nil {
+		s.Error(err.Error())
+	}
+
 	s.config.OutputFile = BaseFilename + ".ejson"
 	err = writeEJSON(s.config.OutputFile, s.config, res)
 	if err != nil {
@@ -284,6 +295,8 @@ func (s *Stdoutput) SaveFile(filename, format string) error {
 		err = s.writeToAll(filename, s.config, append(s.Results, s.CurrentResults...))
 	case "json":
 		err = writeJSON(filename, s.config, append(s.Results, s.CurrentResults...))
+	case "jsonl":
+		err = writeJSONL(filename, s.config, append(s.Results, s.CurrentResults...))
 	case "ejson":
 		err = writeEJSON(filename, s.config, append(s.Results, s.CurrentResults...))
 	case "html":

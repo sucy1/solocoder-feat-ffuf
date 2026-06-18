@@ -69,6 +69,7 @@ type GeneralOptions struct {
 	StopOnAll                 bool     `json:"stop_on_all"`
 	StopOnErrors              bool     `json:"stop_on_errors"`
 	Threads                   int      `json:"threads"`
+	UserAgentFile             string   `json:"useragentfile"`
 	Verbose                   bool     `json:"verbose"`
 }
 
@@ -144,6 +145,7 @@ func NewConfigOptions() *ConfigOptions {
 	c.General.StopOnAll = false
 	c.General.StopOnErrors = false
 	c.General.Threads = 40
+	c.General.UserAgentFile = ""
 	c.General.Verbose = false
 	c.HTTP.Data = ""
 	c.HTTP.FollowRedirects = false
@@ -450,11 +452,18 @@ func ConfigFromOptions(parseOpts *ConfigOptions, ctx context.Context, cancel con
 	//Check the output file format option
 	if parseOpts.Output.OutputFile != "" {
 		//No need to check / error out if output file isn't defined
-		outputFormats := []string{"all", "json", "ejson", "html", "md", "csv", "ecsv"}
+		outputFormats := []string{"all", "json", "jsonl", "ejson", "html", "md", "csv", "ecsv"}
 		found := false
 		for _, f := range outputFormats {
 			if f == parseOpts.Output.OutputFormat {
 				conf.OutputFormat = f
+				found = true
+			}
+		}
+		// Auto-detect format from file extension
+		if !found {
+			if strings.HasSuffix(strings.ToLower(parseOpts.Output.OutputFile), ".jsonl") {
+				conf.OutputFormat = "jsonl"
 				found = true
 			}
 		}
@@ -541,6 +550,26 @@ func ConfigFromOptions(parseOpts *ConfigOptions, ctx context.Context, cancel con
 	conf.Verbose = parseOpts.General.Verbose
 	conf.Json = parseOpts.General.Json
 	conf.Http2 = parseOpts.HTTP.Http2
+	conf.UserAgentFile = parseOpts.General.UserAgentFile
+
+	// Load User-Agent list from file
+	if conf.UserAgentFile != "" {
+		uaContent, err := os.ReadFile(conf.UserAgentFile)
+		if err != nil {
+			errs.Add(fmt.Errorf("Could not read User-Agent file: %s", err))
+		} else {
+			uaLines := strings.Split(string(uaContent), "\n")
+			for _, ua := range uaLines {
+				ua = strings.TrimSpace(ua)
+				if ua != "" && !strings.HasPrefix(ua, "#") {
+					conf.UserAgentList = append(conf.UserAgentList, ua)
+				}
+			}
+			if len(conf.UserAgentList) == 0 {
+				errs.Add(fmt.Errorf("User-Agent file is empty or contains no valid entries"))
+			}
+		}
+	}
 
 	// Check that fmode and mmode have sane values
 	valid_opmodes := []string{"and", "or"}
